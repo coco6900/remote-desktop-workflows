@@ -1,4 +1,4 @@
-name: macOS VNC - CLOUDFLARE
+name: macOS VNC - CLOUDFLARE FINAL
 on:
   workflow_dispatch:
 
@@ -13,61 +13,61 @@ jobs:
           brew install cloudflare/cloudflare/cloudflared
           echo "✅ Cloudflared Installed!"
 
-      - name: Enable VNC/Screen Sharing
+      - name: Enable VNC & Bypass Security
         run: |
+          # 1. Activation de base
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
+          
+          # 2. Forcer l'acceptation du compte "runner" pour le partage d'écran
+          sudo dscl . -append /Groups/com.apple.access_screensharing GroupMembership runner
+          
+          # 3. Supprimer l'exigence du nom d'utilisateur (Mode Legacy VNC)
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement VNCAlwaysShowDiscoveryHugeIcon -bool true
           sudo defaults write /var/db/launchd.db/com.apple.launchd/overrides.plist com.apple.screensharing -dict Disabled -bool false
-          echo "✅ VNC Enabled!"
+          
+          echo "✅ VNC Security Tweaked!"
 
-      - name: Set VNC Password (Legacy VNC)
+      - name: Set VNC Password
         shell: bash
         run: |
           set -e
-          sudo mkdir -p /Library/Preferences
-          
-          # Configuration via kickstart
+          # Configuration du mot de passe pour le mode Legacy
           echo "P@ssw0rd123!" | sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -restart -agent -privs -all \
             -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw P@ssw0rd123!
           
-          # Injection directe du Hash MD5 dans le plist système
+          # Injection du Hash MD5 pour les anciens clients
+          HASH=$(python3 -c "import hashlib; print(hashlib.md5(b'P@ssw0rd123!').hexdigest())")
           sudo /usr/libexec/PlistBuddy -c "Add :VNCLegacyPasswords array" /Library/Preferences/com.apple.RemoteManagement.plist 2>/dev/null || true
           sudo /usr/libexec/PlistBuddy -c "Delete :VNCLegacyPasswords:0" /Library/Preferences/com.apple.RemoteManagement.plist 2>/dev/null || true
-          
-          # Calcul du Hash via Python (compatible runners GitHub)
-          HASH=$(python3 -c "import hashlib; print(hashlib.md5(b'P@ssw0rd123!').hexdigest())")
-          
           sudo /usr/libexec/PlistBuddy -c "Add :VNCLegacyPasswords:0 data $(echo $HASH | xxd -r -p | base64)" /Library/Preferences/com.apple.RemoteManagement.plist
           
-          # Redémarrage du service d'affichage
+          # Relance du service
           sudo launchctl unload /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-          echo "✅ VNC Password Set!"
+          echo "✅ VNC Password & Permissions Ready!"
 
       - name: Start Cloudflare Tunnel
         run: |
           echo "============================================"
           echo "🚀 macOS VNC - CLOUDFLARE TUNNEL"
           echo "============================================"
-          # On lance le tunnel et on force l'écriture des logs
           cloudflared tunnel --url tcp://localhost:5900 > tunnel.log 2>&1 &
           
           echo "⏳ Waiting for Tunnel URL..."
           sleep 20
           
-          # On affiche l'URL pour que tu puisses la copier
-          grep -o 'https://[^[:space:]]*trycloudflare.com' tunnel.log || echo "URL non trouvée, vérification complète du log :"
-          cat tunnel.log
+          grep -o 'https://[^[:space:]]*trycloudflare.com' tunnel.log || cat tunnel.log
           
           echo ""
           echo "✅ TUNNEL STARTED!"
           echo "📋 CONNECTION DETAILS:"
+          echo "   USERNAME: runner"
           echo "   PASSWORD: P@ssw0rd123!"
           echo "============================================"
 
       - name: Keep Session Alive
         run: |
-          echo "⏳ Session Active - Keeping alive..."
           while true; do
             sleep 60
             echo "✓ Active - $(date '+%H:%M:%S')"
