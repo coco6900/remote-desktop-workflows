@@ -1,40 +1,27 @@
-name: macOS VNC - NGROK
+name: macOS VNC - WEB ACCESS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Install Ngrok & Force Display
+      - name: Install Tools
         run: |
-          brew install ngrok
-          # Force macOS à simuler un écran pour éviter le noir
-          sudo defaults write /Library/Preferences/com.apple.windowserver.plist DisplayResolutionEnabled -bool true
-          sudo defaults write /Library/Preferences/com.apple.windowserver.plist DisplayAnywhere -bool true
-          echo "✅ Écran virtuel activé"
+          brew install cloudflared
+          # On installe un petit pont qui transforme le VNC en page Web
+          brew install novnc
 
       - name: Enable VNC
         run: |
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw P@ssw0rd123!
-          echo "✅ VNC prêt avec mot de passe P@ssw0rd123!"
 
-      - name: Start Ngrok Tunnel
+      - name: Start Web Bridge & Tunnel
         run: |
-          # Ton Token est configuré ici
-          ngrok authtoken 3EEcwRqdv6kv0zGDXgwiMCzQUdO_6uT6VEasmrbrP2L5UXmC4
+          # On lance websockify pour transformer le port 5900 (VNC) en port 6080 (Web)
+          # Utilise le chemin complet pour novnc/websockify
+          $(brew --prefix novnc)/bin/novnc_proxy --vnc localhost:5900 --listen 6080 &
+          sleep 5
           
-          echo "🚀 Lancement du tunnel Ngrok..."
-          # Lancement du tunnel TCP sur le port VNC 5900
-          ngrok tcp 5900 --log=stdout > ngrok.log &
-          sleep 10
-          
-          # Récupération de l'adresse publique
-          URL=$(curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url')
-          
-          echo "=========================================="
-          echo "ADRESSE DE CONNEXION : $URL"
-          echo "=========================================="
-          
-          # Garde le job actif pour 6 heures
-          while true; do sleep 60; done
+          echo "🚀 Ouverture du tunnel Web..."
+          cloudflared tunnel --url http://localhost:6080
