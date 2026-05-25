@@ -1,6 +1,6 @@
 name: macOS VNC - CLOUDFLARE
 on:
-  workflow_dispatch
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,21 +23,23 @@ jobs:
         shell: bash
         run: |
           set -e
-          # Ensure RemoteManagement directories exist and proper ownership
           sudo mkdir -p /Library/Preferences
-          # Use kickstart with sudo to set legacy VNC password
+          
+          # Configuration via kickstart
           echo "P@ssw0rd123!" | sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate -configure -access -on -restart -agent -privs -all \
             -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw P@ssw0rd123!
-          # Also set system VNC password key (some runners require this)
+          
+          # Injection directe du Hash MD5 dans le plist système
           sudo /usr/libexec/PlistBuddy -c "Add :VNCLegacyPasswords array" /Library/Preferences/com.apple.RemoteManagement.plist 2>/dev/null || true
           sudo /usr/libexec/PlistBuddy -c "Delete :VNCLegacyPasswords:0" /Library/Preferences/com.apple.RemoteManagement.plist 2>/dev/null || true
-          HASH=$(python3 - <<'PY'
-import sys,hashlib
-print(hashlib.md5(b"P@ssw0rd123!").hexdigest())
-PY
-)
+          
+          # Calcul du Hash via Python (compatible runners GitHub)
+          HASH=$(python3 -c "import hashlib; print(hashlib.md5(b'P@ssw0rd123!').hexdigest())")
+          
           sudo /usr/libexec/PlistBuddy -c "Add :VNCLegacyPasswords:0 data $(echo $HASH | xxd -r -p | base64)" /Library/Preferences/com.apple.RemoteManagement.plist
+          
+          # Redémarrage du service d'affichage
           sudo launchctl unload /System/Library/LaunchDaemons/com.apple.screensharing.plist 2>/dev/null || true
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
           echo "✅ VNC Password Set!"
@@ -47,17 +49,20 @@ PY
           echo "============================================"
           echo "🚀 macOS VNC - CLOUDFLARE TUNNEL"
           echo "============================================"
-          echo ""
+          # On lance le tunnel et on force l'écriture des logs
           cloudflared tunnel --url tcp://localhost:5900 > tunnel.log 2>&1 &
-          sleep 15
-          cat tunnel.log | grep -o 'https://[^[:space:]]*trycloudflare.com' || echo "Check logs for tunnel URL"
+          
+          echo "⏳ Waiting for Tunnel URL..."
+          sleep 20
+          
+          # On affiche l'URL pour que tu puisses la copier
+          grep -o 'https://[^[:space:]]*trycloudflare.com' tunnel.log || echo "URL non trouvée, vérification complète du log :"
+          cat tunnel.log
+          
           echo ""
           echo "✅ TUNNEL STARTED!"
-          echo ""
           echo "📋 CONNECTION DETAILS:"
           echo "   PASSWORD: P@ssw0rd123!"
-          echo "   OS: macOS Monterey/Ventura"
-          echo "   Architecture: $(uname -m)"
           echo "============================================"
 
       - name: Keep Session Alive
