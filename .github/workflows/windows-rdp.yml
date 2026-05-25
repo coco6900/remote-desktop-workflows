@@ -28,24 +28,8 @@ jobs:
           Write-Host "============================================"
           Write-Host "🚀 WINDOWS RDP - CLOUDFLARE TUNNEL"
           Write-Host "============================================"
-          Write-Host ""
-          Start-Process PowerShell -ArgumentList '-NoExit -Command "cloudflared tunnel --url tcp://localhost:3389"'
-          Start-Sleep -Seconds 15
-          Write-Host ""
-          Write-Host "✅ TUNNEL STARTED! Check separate PowerShell window for URL"
-          Write-Host ""
-          Write-Host "📋 CONNECTION DETAILS:"
-          Write-Host "   USERNAME: runneradmin"
-          Write-Host "   PASSWORD: P@ssw0rd123!"
-          Write-Host "   OS: Windows Server 2022"
-          Write-Host "   CPU: 4 cores"
-          Write-Host "   RAM: 16GB"
+          Write-Host "L'URL va apparaître ci-dessous dans quelques secondes..."
+          Write-Host "Cherchez la ligne : 'Your quick Tunnel has been created!'"
           Write-Host "============================================"
-
-      - name: Keep Session Alive
-        run: |
-          Write-Host "⏳ Session Active - Keeping alive..."
-          while ($true) {
-            Start-Sleep -Seconds 60
-            Write-Host "✓ Active - $(Get-Date -Format 'HH:mm:ss')"
-          }
+          # On lance le tunnel en arrière-plan sans ouvrir de nouvelle fenêtre invisible
+          cloudflared tunnel --url tcp://localhost:3389
