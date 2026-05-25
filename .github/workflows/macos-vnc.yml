@@ -1,27 +1,27 @@
-name: macOS VNC - WEB ACCESS
+name: macOS VNC - CLOUDFLARE FINAL
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Install Tools
-        run: |
-          brew install cloudflared
-          # On installe un petit pont qui transforme le VNC en page Web
-          brew install novnc
+      - name: Install Cloudflared
+        run: brew install cloudflared
 
-      - name: Enable VNC
+      - name: Enable VNC & Force Graphics
         run: |
+          # 1. Active le partage d'écran
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all -allowAccessFor -allUsers
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw P@ssw0rd123!
 
-      - name: Start Web Bridge & Tunnel
-        run: |
-          # On lance websockify pour transformer le port 5900 (VNC) en port 6080 (Web)
-          # Utilise le chemin complet pour novnc/websockify
-          $(brew --prefix novnc)/bin/novnc_proxy --vnc localhost:5900 --listen 6080 &
-          sleep 5
+          # 2. COMMANDE MAGIQUE : Force le WindowServer à simuler une activité
+          # On demande au Mac de prendre une capture d'écran (ça force le moteur graphique à s'allumer)
+          screencapture /tmp/test.png
           
-          echo "🚀 Ouverture du tunnel Web..."
-          cloudflared tunnel --url http://localhost:6080
+          # 3. Empêche la mise en veille
+          caffeinate -u -t 3600 & 
+
+      - name: Start Tunnel
+        run: |
+          echo "🚀 Copie l'URL ci-dessous..."
+          cloudflared tunnel --url tcp://localhost:5900
